@@ -1,7 +1,8 @@
 """HadamardLab – construction of Hadamard matrices, MOLS / orthogonal arrays and lattice designs.
 
 Developed by Dr. Sukanta Dash, Senior Scientist, Division of Statistical Ecology and
-Environmental Statistics, ICAR-IASRI, New Delhi-110012 (sukanta.iasri@gmail.com).
+Environmental Statistics, ICAR-IASRI, New Delhi-110012 (sukantadash.iasri@icar.org.in).
+Identity, citation and copyright: hadamard_lab/content.py; information pages: hadamard_lab/site.py.
 
 Run with::
 
@@ -36,6 +37,7 @@ from hadamard_lab import constructions as C
 from hadamard_lab import content as T
 from hadamard_lab import mols as M
 from hadamard_lab import planner as P
+from hadamard_lab import site as S
 from hadamard_lab.gf import field as gf_field, modulus_string, prime_power
 
 HERE = Path(__file__).parent
@@ -138,7 +140,7 @@ overview_page = ui.nav_panel(
                            "are re-verified against their defining equations."),
                 ui.tags.li("A test-suite builds every constructible order with every applicable method and checks it independently."),
                 ui.tags.li("Four formulas that fail when transcribed literally were re-derived and are documented under About."))),
-    ui.div(f"HadamardLab {__version__} · Developed by {T.DEVELOPER}, {T.AFFILIATION_LINE} · {T.EMAIL} · data fingerprint {DATA_SHA}", class_="foot"),
+    S.cite_panel(),
 )
 
 
@@ -163,13 +165,12 @@ def _methods_page():
         ui.h3("Constructions"),
         ui.p("Statements follow the classical literature; ‘Orders reachable’ is computed from the actual planner, "
              "so it reflects what this installation can really build."),
-        ui.accordion(*panels, id="methods_acc", open=False),
-        ui.div(f"HadamardLab {__version__} · Developed by {T.DEVELOPER}, {T.AFFILIATION_LINE} · {T.EMAIL}", class_="foot"))
+        ui.accordion(*panels, id="methods_acc", open=False))
 
 
 def _about_page():
     return ui.nav_panel(
-        "About",
+        "About HadamardLab",
         ui.h3("About and validation"),
         ui.layout_columns(
             ui.card(ui.card_header("Developer and provenance"), ui.p(ui.HTML(T.DEVELOPER_CREDIT)), ui.p(ui.HTML(T.DATA_CREDIT)),
@@ -188,11 +189,9 @@ def _about_page():
                     ui.tags.li("Williamson-type matrices exist only for the stored orders; the app does not search for new ones."))),
         ui.card(ui.card_header("References"),
                 ui.tags.ol(*[ui.tags.li(ui.HTML(r)) for r in T.REFERENCES], class_="ref")),
-        ui.card(ui.card_header("Suggested citation"),
-                ui.p(f"Dash, S. HadamardLab (v{__version__}): a verified generator of Hadamard matrices, MOLS, "
-                     f"orthogonal arrays and lattice designs. {T.DIVISION}, {T.INSTITUTE}. "
-                     f"Accessed {_dt.date.today().isoformat()}.")),
-        ui.div(f"HadamardLab {__version__} · Developed by {T.DEVELOPER}, {T.AFFILIATION_LINE} · {T.EMAIL}", class_="foot"))
+        ui.card(ui.card_header("How to cite"),
+                ui.p("Please cite HadamardLab as shown on the ", ui.input_action_link("about_to_cite", "How to cite"),
+                     " page, where the citation, BibTeX and RIS files are available.")))
 
 
 # ==========================================================================
@@ -316,11 +315,15 @@ MATHJAX = ui.head_content(
 )
 
 app_ui = ui.page_navbar(
-    overview_page, generator_page, explorer_page, mols_page, lattice_page, _methods_page(), _about_page(),
-    title=ui.span("HadamardLab", ui.tags.small("combinatorial designs"), class_="brand"),
+    overview_page, generator_page, explorer_page, mols_page, lattice_page, _methods_page(),
+    ui.nav_menu("About", _about_page(), S.cite_page(), S.legal_page(), value="about_menu"),
+    S.contact_page(),
+    title=ui.span(ui.tags.img(src="icar-logo.png", class_="brand-logo", alt=""), "HadamardLab",
+                  ui.tags.small("combinatorial designs"), class_="brand"),
     id="main_nav",
-    header=ui.TagList(ui.tags.style(CSS), MATHJAX),
-    window_title="HadamardLab – Hadamard matrices, MOLS and lattice designs | Dr. Sukanta Dash",
+    header=ui.TagList(S.FONTS, ui.tags.style(CSS), MATHJAX, ui.tags.script(ui.HTML(S.SCRIPT)), S.inst_strip()),
+    footer=S.footer(__version__),
+    window_title=f"HadamardLab \u2013 Hadamard matrices, MOLS and lattice designs | {T.INSTITUTE_SHORT}",
     fillable=False,
 )
 
@@ -348,6 +351,47 @@ def _tree_dict(node: P.Node) -> dict:
 
 
 def server(input, output, session):
+    # ---- citation (access date = today in India) and information-page links ----
+    @render.ui
+    def cite_main():
+        return ui.HTML(T.citation_html())
+
+    @render.ui
+    def cite_home():
+        return ui.HTML(T.citation_html())
+
+    @render.text
+    def cite_bibtex():
+        return T.citation_bibtex()
+
+    @render.download(filename="HadamardLab_citation.bib")
+    def dl_bib():
+        yield T.citation_bibtex()
+
+    @render.download(filename="HadamardLab_citation.ris")
+    def dl_ris():
+        yield T.citation_ris()
+
+    _update_nav = getattr(ui, "update_navset", None) or ui.update_navs
+
+    def _goto(target):
+        _update_nav("main_nav", selected=target)
+
+    @reactive.effect
+    @reactive.event(input.ft_cite, input.home_to_cite, input.about_to_cite)
+    def _go_cite():
+        _goto("cite")
+
+    @reactive.effect
+    @reactive.event(input.ft_copyright, input.ft_disclaimer)
+    def _go_legal():
+        _goto("legal")
+
+    @reactive.effect
+    @reactive.event(input.ft_contact)
+    def _go_contact():
+        _goto("contact")
+
     # ------------------------------------------------------------------
     # Hadamard generator
     # ------------------------------------------------------------------
@@ -813,7 +857,7 @@ def server(input, output, session):
         yield x["book"].to_csv(index=False) if x["ok"] else "No design generated\n"
 
 
-app = App(app_ui, server)
+app = App(app_ui, server, static_assets=HERE / "www")
 
 
 if __name__ == "__main__":

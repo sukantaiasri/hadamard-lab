@@ -5,7 +5,13 @@ complete sets of mutually orthogonal Latin squares (MOLS), orthogonal arrays OA(
 square-lattice designs.
 
 **Developed by Dr. Sukanta Dash**, Senior Scientist, Division of Statistical Ecology and Environmental
-Statistics, ICAR-IASRI, New Delhi-110012 · sukanta.iasri@gmail.com
+Statistics, ICAR-IASRI, New Delhi-110012 · sukantadash.iasri@icar.org.in
+
+**How to cite** (the access date is filled in automatically on the How to cite page):
+Dash, S. (2026). HadamardLab: A Verified Generator of Hadamard Matrices, Mutually Orthogonal Latin Squares,
+Orthogonal Arrays and Lattice Designs. https://iasri-sukanta-hadamardlab.share.connect.posit.cloud/ (accessed on <date>).
+
+© 2026 ICAR-Indian Agricultural Statistics Research Institute, New Delhi. All rights reserved.
 
 ## Run
 
@@ -16,7 +22,8 @@ shiny run --reload app.py            # http://127.0.0.1:8000
 ```
 
 Docker: `docker build -t hadamardlab . && docker run -p 8000:8000 hadamardlab`.
-Posit Connect / shinyapps.io: `pip install rsconnect-python && rsconnect deploy shiny .`
+Posit Connect Cloud / shinyapps.io: `pip install rsconnect-python && rsconnect deploy shiny .`
+(deploy without the local `.venv/` folder; `requirements.txt` lists the packages).
 
 ## What it does
 
@@ -27,6 +34,7 @@ Posit Connect / shinyapps.io: `pip install rsconnect-python && rsconnect deploy 
 | MOLS & orthogonal arrays | Complete set of s − 1 MOLS over GF(s) for every prime power s ≤ 997, with the orthogonal array. Verification is exhaustive for small s and sampled (and labelled so) for large s. |
 | Lattice designs | Simple / triple / balanced square lattices for k² treatments, field book, concurrence structure, efficiency factors. |
 | Methods, About | Theorem statements, reachable orders per method, provenance, corrections, references. |
+| How to cite, Copyright & disclaimer, Contact | Citation with live access date, BibTeX/RIS downloads, terms of use, developer and institute details. |
 
 ## Layout
 
@@ -38,7 +46,8 @@ hadamard_lab/
   planner.py            feasibility DP over orders, recursive construction, traces
   analysis.py           verification, normalisation, properties, export, Plackett–Burman
   mols.py               MOLS, orthogonal arrays, lattice designs
-  content.py            method statements, corrections log, bibliography
+  content.py            method statements, corrections log, bibliography; title, URL, citation, copyright (edit here)
+  site.py               How to cite, Copyright & disclaimer and Contact pages, institute strip, footer
   data/sequences.json   Williamson / base / Turyn sequences and SDS (verified)
 tests/                  115 tests
 www/style.css

@@ -144,8 +144,84 @@ DEVELOPER = "Dr. Sukanta Dash"
 DESIGNATION = "Senior Scientist"
 DIVISION = "Division of Statistical Ecology and Environmental Statistics"
 INSTITUTE = "ICAR-IASRI, New Delhi-110012"
-EMAIL = "sukanta.iasri@gmail.com"
+EMAIL = "sukantadash.iasri@icar.org.in"
+PHONE = "011-25847127-4158"
 AFFILIATION_LINE = f"{DESIGNATION}, {DIVISION}, {INSTITUTE}"
+
+# --------------------------------------------------------------------------
+# Software identity, citation and copyright (edit here)
+# --------------------------------------------------------------------------
+SHORT_NAME = "HadamardLab"
+TITLE = ("HadamardLab: A Verified Generator of Hadamard Matrices, Mutually Orthogonal Latin Squares, "
+         "Orthogonal Arrays and Lattice Designs")
+YEAR = 2026
+URL = "https://iasri-sukanta-hadamardlab.share.connect.posit.cloud/"
+AUTHORS = [{"cite": "Dash, S.", "bib": "Dash, S."}]
+INSTITUTE_FULL = "ICAR-Indian Agricultural Statistics Research Institute"
+INSTITUTE_SHORT = "ICAR-IASRI"
+INSTITUTE_HINDI = "\u092d\u093e\u0915\u0943\u0905\u0928\u0941\u092a-\u092d\u093e\u0930\u0924\u0940\u092f \u0915\u0943\u0937\u093f \u0938\u093e\u0902\u0916\u094d\u092f\u093f\u0915\u0940 \u0905\u0928\u0941\u0938\u0902\u0927\u093e\u0928 \u0938\u0902\u0938\u094d\u0925\u093e\u0928"
+PARENT_ORG = "Indian Council of Agricultural Research"
+ADDRESS = "Library Avenue, Pusa, New Delhi 110012, India"
+INSTITUTE_URL = "https://iasri.icar.gov.in/"
+PHONE_OFFICE = "91-11-25847121-24, 25841254 (PBX)"
+FAX = "91-11-25841564"
+COPYRIGHT_HOLDER = "ICAR-Indian Agricultural Statistics Research Institute, New Delhi"
+SD_URL = "https://farmerfirst.halforfarmers.com/sukanta-dash-biodata.html"   # standing instruction
+
+
+def access_date():
+    """Today's date in India (UTC+05:30), used as the access date of the citation."""
+    import datetime as _d
+    return _d.datetime.now(_d.timezone(_d.timedelta(hours=5, minutes=30))).date()
+
+
+def long_date(d=None) -> str:
+    d = d or access_date()
+    return f"{d.day} {d.strftime('%B')} {d.year}"
+
+
+def citation_authors() -> str:
+    x = [a["cite"] for a in AUTHORS]
+    if len(x) == 1:
+        return x[0]
+    if len(x) == 2:
+        return f"{x[0]} and {x[1]}"
+    return ", ".join(x[:-1]) + ", and " + x[-1]
+
+
+def citation_text(d=None) -> str:
+    return f"{citation_authors()} ({YEAR}). {TITLE}. {URL} (accessed on {long_date(d)})."
+
+
+def citation_html(d=None) -> str:
+    import html
+    return (f"{html.escape(citation_authors())} ({YEAR}). <em>{html.escape(TITLE)}</em>. "
+            f"<a href='{URL}' target='_blank' rel='noopener'>{URL}</a> (accessed on {long_date(d)}).")
+
+
+def citation_bibtex(d=None) -> str:
+    authors = " and ".join(a["bib"] for a in AUTHORS)
+    key = AUTHORS[0]["cite"].split(",")[0].lower() + str(YEAR) + SHORT_NAME.lower()
+    return ("@misc{" + key + ",\n"
+            f"  author       = {{{authors}}},\n"
+            f"  title        = {{{TITLE}}},\n"
+            f"  year         = {{{YEAR}}},\n"
+            f"  howpublished = {{\\url{{{URL}}}}},\n"
+            f"  note         = {{Accessed on {long_date(d)}}}\n"
+            "}")
+
+
+def citation_ris(d=None) -> str:
+    d = d or access_date()
+    lines = ["TY  - COMP"] + [f"AU  - {a['cite']}" for a in AUTHORS] + [
+        f"TI  - {TITLE}", f"PY  - {YEAR}", f"UR  - {URL}", f"Y2  - {d.strftime('%Y/%m/%d')}",
+        f"PB  - {INSTITUTE_FULL}, New Delhi", "ER  - ", ""]
+    return "\r\n".join(lines)
+
+
+def copyright_line() -> str:
+    return f"\u00a9 {YEAR} {COPYRIGHT_HOLDER}. All rights reserved."
+
 
 DEVELOPER_CREDIT = (
     f"HadamardLab was developed by <b>{DEVELOPER}</b>, {DESIGNATION}, {DIVISION}, {INSTITUTE}. "
