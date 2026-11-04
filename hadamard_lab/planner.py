@@ -20,11 +20,17 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from . import constructions as C
+from . import sequences as SQ
 from .gf import field as gf_field, is_prime_power, modulus_string, prime_power
 
 ORDER_LIMIT = 1000
-KNOWN_OPEN = (668, 716, 892)          # no Hadamard matrix known (n <= 1000)
-KNOWN_BUT_NOT_IMPLEMENTED = (876,)  # exists in the literature (Djokovic); sequence data not available here
+# Since August 2026 (Alpöge, Voinov & Reynolds-Haertle; verified by Egan, Kotsireas, London &
+# Ó Catháin, 2026) a Hadamard matrix is known at every order below 2000.  The sequences behind
+# the former open orders 668, 716 and 892 are bundled, so no order <= 1000 is open or missing.
+KNOWN_OPEN: Tuple[int, ...] = ()              # no Hadamard matrix known (n <= 1000): none
+KNOWN_BUT_NOT_IMPLEMENTED: Tuple[int, ...] = ()
+SMALLEST_OPEN_ORDER = 2396                     # = 4 * 599, the smallest order with no known matrix
+OPEN_BELOW_2000_SETTLED = (668, 716, 892, 1132, 1244, 1388, 1436, 1676, 1772, 1916, 1948, 1964)
 
 
 # ==========================================================================
@@ -201,6 +207,41 @@ def explain_method(method: str, n: int) -> Tuple[bool, str]:
         if ok:
             return True, f"4 supplementary difference sets in Z_{n // 4}."
         return False, "Needs stored supplementary difference sets with N = n/4 ∈ " + ", ".join(map(str, sorted(d["sds"]))) + "."
+    if method == "golay2c":
+        if ok:
+            return True, f"Golay pair of length g = n/2 = {n // 2} (g = 2^a·10^b·26^c)."
+        return False, f"n/2 = {n / 2:g} is not a Golay length 2^a·10^b·26^c."
+    if method == "gs_golay":
+        if ok:
+            o = [o.p for o in feasible_options(n) if o.method == method][0]
+            kind = "length g" if o["source"] == "golay" else "length 2g + 1"
+            return True, f"T-sequences of {kind} from the Golay pair of length {o['g']}; n = 4·{o['t']}."
+        return False, "n/4 is neither a Golay length g nor 2g + 1 for a Golay length g."
+    if method == "gs_tseq":
+        if ok:
+            return True, f"Stored T-sequences of length {n // 4}."
+        return False, "Needs stored T-sequences of length n/4 ∈ " + ", ".join(map(str, sorted(d["tseq"]))) + "."
+    if method == "legendre":
+        if ok:
+            o = [o.p for o in feasible_options(n) if o.method == method][0]
+            return True, f"Legendre pair of length ℓ = (n − 2)/2 = {o['l']}: " + \
+                SQ.describe_legendre_source(C.thaw_spec(o["spec"])) + "."
+        return False, f"No Legendre pair of length ℓ = (n − 2)/2 = {(n - 2) // 2} is available (prime, stored or two-level)."
+    if method == "dscore":
+        if ok:
+            o = [o.p for o in feasible_options(n) if o.method == method][0]
+            return True, f"Difference set of length ℓ = n − 1 = {o['l']}: " + SQ.describe_two_level(C.thaw_spec(o["spec"])) + "."
+        return False, f"ℓ = n − 1 = {n - 1} is not 2^k − 1, q(q + 2) for twin prime powers, or a Hall prime 4x² + 27."
+    if method == "lquad":
+        if ok:
+            return True, f"Stored Legendre quadruple of length m = (n − 4)/4 = {(n - 4) // 4}."
+        return False, (f"Needs a stored Legendre quadruple of length m = (n − 4)/4 = {(n - 4) / 4:g}; stored: "
+                       + ", ".join(map(str, sorted(d["lquads"]))) + ".")
+    if method == "scarpis":
+        if ok:
+            o = [o.p for o in feasible_options(n) if o.method == method][0]
+            return True, f"n = q(q + 1) with q = {o['q']} ≡ 3 (mod 4) a prime power; an Hadamard matrix of order {o['q'] + 1} is available."
+        return False, "n is not q(q + 1) for a prime power q ≡ 3 (mod 4)."
     if method == "kronecker":
         if ok:
             o = [o.p for o in feasible_options(n) if o.method == method][0]
@@ -274,6 +315,31 @@ def _notes(method: str, n: int, p: dict) -> List[str]:
     if method == "sds":
         sets = C.sequence_data()["sds"][p["N"]]
         out.append(f"Subset sizes {[len(s) for s in sets]}, λ = {sum(len(s) for s in sets) - p['N']} in Z_{p['N']}.")
+        if p["N"] == 223:
+            out.append("Sets recovered from the order-892 matrix announced by Alpöge, Voinov and Reynolds-Haertle (2026).")
+    if method == "golay2c":
+        out.append(f"Golay pair of length {p['g']} built from the seeds of lengths 2, 10, 26 by Turyn's product; "
+                   "H = [[A, B], [−Bᵀ, Aᵀ]] with circulant A, B.")
+    if method == "gs_golay":
+        out.append(("T-sequences ((a+b)/2, (a−b)/2, 0, 0) of the Golay pair" if p["source"] == "golay"
+                    else "Base sequences (a,1), (a,−1), b, b of the Golay pair, then T-sequences of length 2g+1")
+                   + "; circulants in the Goethals–Seidel array.")
+    if method == "gs_tseq":
+        out.append("T-sequences stored directly (recovered from the Hadamard Matrix Explorer tables, 2026).")
+    if method == "legendre":
+        out.append(SQ.describe_legendre_source(C.thaw_spec(p["spec"])).capitalize() +
+                   "; two-circulant core with a 2 × 2 border (Fletcher–Gysin–Seberry array).")
+    if method == "dscore":
+        spec = C.thaw_spec(p["spec"])
+        out.append(SQ.describe_two_level(spec).capitalize() + "; bordered "
+                   + ("circulant" if spec.get("cyclic", True) else "group-developed") + " core.")
+    if method == "lquad":
+        out.append("Four circulants with periodic autocorrelations summing to −4, row sums (2, 0, 0, 0); "
+                   "Goethals–Seidel array with a border of width 4 (Egan et al. 2026, Theorem 5)."
+                   + (" Sequences from the announcement of Alpöge, Voinov and Reynolds-Haertle (2026)."
+                      if p["m"] in (166, 178) else " Sequences found by HadamardLab's own search."))
+    if method == "scarpis":
+        out.append(f"Normalised input matrix of order {p['q'] + 1}; core rows permuted by x ↦ x·r + k in GF({p['q']}).")
     return out
 
 
@@ -332,6 +398,9 @@ def construct(n: int, method: Optional[str] = None, option_index: int = 0) -> Co
 def describe_node(node: Node) -> str:
     """Compact one-line description of a node, e.g. ``Paley I (q = 11)``."""
     p = node.params
-    show = {k: v for k, v in p.items() if k not in ("source", "key")}
+    show = {k: v for k, v in p.items() if k not in ("source", "key", "spec")}
+    if "spec" in p:
+        spec = C.thaw_spec(p["spec"])
+        show["source"] = spec["kind"] + "".join(f" {k}={v}" for k, v in spec.items() if k not in ("kind", "cyclic"))
     inner = ", ".join(f"{k} = {v}" for k, v in show.items())
     return f"{node.label}" + (f" ({inner})" if inner else "")

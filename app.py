@@ -37,6 +37,8 @@ from hadamard_lab import constructions as C
 from hadamard_lab import content as T
 from hadamard_lab import mols as M
 from hadamard_lab import planner as P
+from hadamard_lab import seqlab as SL
+from hadamard_lab import sequences as SQ
 from hadamard_lab import site as S
 from hadamard_lab.gf import field as gf_field, modulus_string, prime_power
 
@@ -74,24 +76,29 @@ METHOD_CHOICES = {"auto": "Automatic (preferred applicable method)"}
 METHOD_CHOICES.update({m.key: m.name for m in sorted(C.METHODS.values(), key=lambda m: m.priority)
                        if m.key != "trivial"})
 
+# (long label, method keys, colour, short label for the plot legend)
 FAMILIES = [
-    ("Sylvester / Paley family", ("sylvester", "paley1", "paley2", "paley2_general", "trivial"), "#2b6cb0"),
-    ("Block-array constructions", ("baumert_hall", "ehlich", "miyamoto"), "#2f855a"),
-    ("Sequence-based (Williamson, Goethals–Seidel, SDS …)",
-     ("williamson", "gs_turyn", "gs_base", "cooper_wallis", "sds"), "#d69e2e"),
-    ("Kronecker product", ("kronecker",), "#805ad5"),
-    ("Open – no matrix known", (), "#c53030"),
-    ("Exists in literature, not implemented", (), "#8a94a0"),
+    ("Sylvester / Paley family", ("sylvester", "paley1", "paley2", "paley2_general", "trivial"), "#2b6cb0",
+     "Sylvester / Paley"),
+    ("Two-circulant and difference-set cores (Golay pairs, Legendre pairs, Singer / twin-prime / Hall sets)",
+     ("golay2c", "legendre", "dscore"), "#0e7c86", "Two-circulant / difference-set cores"),
+    ("Block-array constructions (Baumert–Hall, Ehlich, Miyamoto, Scarpis)", ("baumert_hall", "ehlich", "miyamoto", "scarpis"),
+     "#2f855a", "Block arrays (Baumert–Hall, Ehlich, Miyamoto, Scarpis)"),
+    ("Sequence-based (Williamson, Goethals–Seidel, T-sequences, SDS, Legendre quadruples)",
+     ("williamson", "gs_turyn", "gs_base", "gs_golay", "gs_tseq", "cooper_wallis", "sds", "lquad"), "#d69e2e",
+     "Sequence-based (Williamson, Goethals–Seidel, SDS …)"),
+    ("Kronecker product", ("kronecker",), "#805ad5", "Kronecker product"),
+    ("Open – no matrix known", (), "#c53030", "Open – no matrix known"),
 ]
 
 
 def family_index(method: str, order: int) -> int:
     if not method:
-        return 4 if order in P.KNOWN_OPEN else 5
-    for i, (_, keys, _) in enumerate(FAMILIES):
+        return len(FAMILIES) - 1
+    for i, (_, keys, _, _) in enumerate(FAMILIES):
         if method in keys:
             return i
-    return 5
+    return len(FAMILIES) - 1
 
 
 # ==========================================================================
@@ -109,20 +116,27 @@ overview_page = ui.nav_panel(
     "Overview",
     ui.div(
         ui.h2("Combinatorial designs for experimental research"),
-        ui.p("Generate and verify Hadamard matrices of order up to 1000 by thirteen classical constructions, "
-             "complete sets of mutually orthogonal Latin squares and orthogonal arrays OA(s², s+1, s, 2), "
-             "and square-lattice designs. Every object is checked against its defining identity before it is shown."),
+        ui.p(f"Generate and verify Hadamard matrices of every admissible order up to 1000 by {len(C.METHODS) - 1} constructions "
+             "— classical (Sylvester, Paley, Williamson, Goethals–Seidel, Baumert–Hall, Ehlich, Miyamoto, Cooper–Wallis, "
+             "supplementary difference sets) and, new in version 2.0, Golay pairs, Legendre pairs and quadruples, cyclic "
+             "Hadamard difference sets and the Scarpis–Đoković construction — together with complete sets of mutually "
+             "orthogonal Latin squares, orthogonal arrays OA(s², s+1, s, 2) and square-lattice designs. Every object is "
+             "checked against its defining identity before it is shown."),
         ui.p(ui.tags.b(f"Developed by {T.DEVELOPER}"), ui.tags.br(), T.AFFILIATION_LINE, ui.tags.br(),
              ui.tags.a(T.EMAIL, href=f"mailto:{T.EMAIL}", style="color:#f2c9bd"),
              style="margin-top:.8rem;opacity:.95;font-size:.92rem"),
         class_="hero"),
     ui.layout_columns(
         ui.card(ui.card_header("Hadamard matrices"),
-                ui.p(f"{COV_OK} of the {COV_ALL} admissible orders 4, 8, …, 1000 are constructible. "
-                     "The only unresolved orders ≤ 1000 are 668, 716 and 892 (no matrix is known to exist) and 876 "
-                     "(known to exist, but the required sequences are not bundled)."),
+                ui.p(f"All {COV_OK} of the {COV_ALL} admissible orders 4, 8, …, 1000 are constructible. Orders 668, 716 and 892 — "
+                     "the smallest open cases of the Hadamard conjecture from 2005 until August 2026 — are built from the "
+                     "sequences announced by Alpöge, Voinov and Reynolds-Haertle (2026); order 876 from T-sequences of length 73."),
                 ui.p("Choose a method or let the planner pick one, normalise, view, verify and export "
                      "(CSV, text, JSON provenance, Plackett–Burman design).")),
+        ui.card(ui.card_header("Construction lab"),
+                ui.p("New in 2.0: build matrices from their ingredients — Golay pairs, T-sequences (with or without "
+                     "Williamson matrices), Legendre pairs and quadruples, Singer / twin-prime / Hall difference sets and "
+                     "the Scarpis–Đoković map H(q+1) → H(q(q+1)) — and see the autocorrelation identity each one satisfies.")),
         ui.card(ui.card_header("Existence explorer"),
                 ui.p("A map of all orders up to 1000 showing which family of constructions reaches each order, with a "
                      "searchable table of all applicable methods.")),
@@ -132,12 +146,15 @@ overview_page = ui.nav_panel(
         ui.card(ui.card_header("Lattice designs"),
                 ui.p("Simple, triple and — for prime-power k — balanced square-lattice designs for k² treatments "
                      "with field book, concurrence structure and efficiency factor.")),
-        col_widths=[3, 3, 3, 3]),
+        col_widths=[3, 3, 2, 2, 2]),
     ui.card(ui.card_header("How correctness is ensured"),
             ui.tags.ul(
                 ui.tags.li("Each constructed matrix H is tested for H·Hᵀ = n·I (exact integer arithmetic) and displayed with the result."),
                 ui.tags.li("The bundled sequence tables (Williamson, base, Turyn-type sequences, supplementary difference sets) "
                            "are re-verified against their defining equations."),
+                ui.tags.li("Golay pairs, Legendre pairs and quadruples, T-sequences and difference sets are checked against their "
+                           "autocorrelation identities before they are used; the matrices of orders 668, 716 and 892 recovered from "
+                           "the 2026 announcement are re-verified on every run."),
                 ui.tags.li("A test-suite builds every constructible order with every applicable method and checks it independently."),
                 ui.tags.li("Four formulas that fail when transcribed literally were re-derived and are documented under About."))),
     S.cite_panel(),
@@ -159,12 +176,14 @@ def _methods_page():
                 ui.p(ui.tags.b(f"Orders ≤ 1000 reachable ({len(orders)}): "), shown or "none")]
         if doc["notes"]:
             body.append(ui.div(ui.HTML(doc["notes"]), class_="corr"))
-        panels.append(ui.accordion_panel(m.name, *body, value=m.key))
+        title = ui.span(m.name, ui.span("new in 2.0", class_="badge-new") if m.key in C.NEW_IN_V2 else None)
+        panels.append(ui.accordion_panel(title, *body, value=m.key))
     return ui.nav_panel(
         "Methods",
         ui.h3("Constructions"),
-        ui.p("Statements follow the classical literature; ‘Orders reachable’ is computed from the actual planner, "
-             "so it reflects what this installation can really build."),
+        ui.p(f"{len(C.METHODS) - 1} constructions; those marked ‘new in 2.0’ can also be run from their ingredients on the "
+             "Construction lab tab. Statements follow the classical literature; ‘Orders reachable’ is computed from the "
+             "actual planner, so it reflects what this installation can really build."),
         ui.accordion(*panels, id="methods_acc", open=False))
 
 
@@ -180,13 +199,21 @@ def _about_page():
             col_widths=[6, 6]),
         ui.card(ui.card_header("Scope and limitations"),
                 ui.tags.ul(
-                    ui.tags.li("Orders are limited to n ≤ 1000. Orders 668, 716 and 892 are open cases of the Hadamard conjecture."),
+                    ui.tags.li("Orders are limited to n ≤ 1000, where every admissible order is now constructible. A Hadamard matrix "
+                               "is known at every order below 2000 (Alpöge, Voinov & Reynolds-Haertle, August 2026; verified by Egan, "
+                               f"Kotsireas, London & Ó Catháin, 2026); the smallest open order is {P.SMALLEST_OPEN_ORDER}."),
+                    ui.tags.li("Legendre pairs and quadruples of composite length are bundled only where a pair/quadruple is stored "
+                               "(found by the built-in search); the app does not search for new ones at run time."),
                     ui.tags.li("Finite fields use a primitive polynomial found by search; for prime powers q = pᵏ with k > 1 the "
                                "labelling of elements (hence the exact matrix) can differ from other software, but the "
                                "matrices are equivalent."),
                     ui.tags.li("Orthogonal arrays are generated from the complete set of MOLS over GF(s). Verification is "
                                "exhaustive for small s and sampled (and labelled as such) when s is large."),
                     ui.tags.li("Williamson-type matrices exist only for the stored orders; the app does not search for new ones."))),
+        ui.card(ui.card_header("Recent references (2013–2026) added in version 2.0"),
+                ui.p("Surveys, new constructions and computational results that the new methods and the coverage statements rest on.",
+                     class_="hint"),
+                ui.tags.ul(*[ui.tags.li(ui.HTML(r)) for r in T.recent_references()], class_="ref")),
         ui.card(ui.card_header("References"),
                 ui.tags.ol(*[ui.tags.li(ui.HTML(r)) for r in T.REFERENCES], class_="ref")),
         ui.card(ui.card_header("How to cite"),
@@ -308,6 +335,58 @@ lattice_page = ui.nav_panel(
                 ui.download_button("l_dl", "Download field book (CSV)", class_="btn-outline-secondary")),
         fillable=False))
 
+
+# ---- Construction lab (new in 2.0) --------------------------------------------------
+seq_sidebar = ui.sidebar(
+    ui.h5("Construction"),
+    ui.input_select("sq_kind", "Build from", SL.KINDS, selected="golay"),
+    ui.output_ui("sq_params"),
+    ui.input_action_button("sq_generate", "Build and verify", class_="btn-primary w-100"),
+    ui.div(ui.p("Each construction starts from its ingredients (a pair, a quadruple, a difference set, T-sequences or "
+                "an input matrix). The identity the ingredients must satisfy is checked first, then the assembled matrix.",
+                class_="hint"), style="margin-top:.8rem"),
+    width=360)
+
+seq_page = ui.nav_panel(
+    "Construction lab",
+    ui.layout_sidebar(
+        seq_sidebar,
+        ui.output_ui("sq_banner"),
+        ui.output_ui("sq_stats"),
+        ui.br(),
+        ui.navset_card_tab(
+            ui.nav_panel("Ingredients",
+                         ui.layout_columns(
+                             ui.card(ui.card_header("Sequences"), ui.output_ui("sq_desc"), _output_code("sq_ingredients"),
+                                     full_screen=True),
+                             ui.card(ui.card_header("Autocorrelation identity"), ui.output_ui("sq_checks"),
+                                     ui.output_plot("sq_corr_plot", height="300px")),
+                             col_widths=[7, 5])),
+            ui.nav_panel("Matrix",
+                         ui.layout_columns(
+                             ui.card(ui.card_header("Sign pattern"), ui.output_plot("sq_matrix_plot", height="560px"),
+                                     full_screen=True),
+                             ui.card(ui.card_header("Text preview"), ui.output_ui("sq_preview_note"),
+                                     _output_code("sq_matrix_text"), full_screen=True),
+                             col_widths=[6, 6])),
+            ui.nav_panel("Verification",
+                         ui.layout_columns(
+                             ui.card(ui.card_header("Orthogonality check"), ui.output_ui("sq_verify_ui")),
+                             ui.card(ui.card_header("Properties"), ui.output_ui("sq_props_ui")),
+                             col_widths=[6, 6])),
+            ui.nav_panel("Export",
+                         ui.card(ui.card_header("Download"),
+                                 ui.p("The matrix is exported as constructed (±1 notation); the ingredients with their "
+                                      "autocorrelation values and the reference as JSON or text."),
+                                 ui.layout_columns(
+                                     ui.download_button("sq_dl_csv", "Matrix (CSV)", class_="btn-outline-secondary w-100"),
+                                     ui.download_button("sq_dl_txt", "Matrix (text)", class_="btn-outline-secondary w-100"),
+                                     ui.download_button("sq_dl_seq", "Ingredients (JSON)", class_="btn-outline-secondary w-100"),
+                                     ui.download_button("sq_dl_seqtxt", "Ingredients (text)", class_="btn-outline-secondary w-100"),
+                                     col_widths=[3, 3, 3, 3]))),
+            id="sq_tabs"),
+        fillable=False))
+
 MATHJAX = ui.head_content(
     ui.tags.meta(name="viewport", content="width=device-width, initial-scale=1"),
     ui.tags.script("window.MathJax = {tex:{inlineMath:[['\\\\(','\\\\)']]}};"),
@@ -315,7 +394,7 @@ MATHJAX = ui.head_content(
 )
 
 app_ui = ui.page_navbar(
-    overview_page, generator_page, explorer_page, mols_page, lattice_page, _methods_page(),
+    overview_page, generator_page, seq_page, explorer_page, mols_page, lattice_page, _methods_page(),
     ui.nav_menu("About", _about_page(), S.cite_page(), S.legal_page(), value="about_menu"),
     S.contact_page(),
     title=ui.span(ui.tags.img(src="icar-logo.png", class_="brand-logo", alt=""), "HadamardLab",
@@ -323,7 +402,7 @@ app_ui = ui.page_navbar(
     id="main_nav",
     header=ui.TagList(S.FONTS, ui.tags.style(CSS), MATHJAX, ui.tags.script(ui.HTML(S.SCRIPT)), S.inst_strip()),
     footer=S.footer(__version__),
-    window_title=f"HadamardLab \u2013 Hadamard matrices, MOLS and lattice designs | {T.INSTITUTE_SHORT}",
+    window_title=f"HadamardLab \u2013 Hadamard matrices, sequences, MOLS and lattice designs | {T.INSTITUTE_SHORT}",
     fillable=False,
 )
 
@@ -616,6 +695,230 @@ def server(input, output, session):
         yield pb().to_csv() if r.ok else "No matrix generated\n"
 
     # ------------------------------------------------------------------
+    # Construction lab (new in 2.0)
+    # ------------------------------------------------------------------
+    def _sel(name, default=None):
+        try:
+            v = input[name]()
+        except Exception:
+            return default
+        return default if v is None else v
+
+    @render.ui
+    def sq_params():
+        kind = input.sq_kind()
+        if kind == "golay":
+            return ui.input_select("sq_g", "Golay length g = 2^a·10^b·26^c", SL.golay_choices(), selected="10")
+        if kind == "tseq":
+            L = int(_sel("sq_t", "21") or 21)
+            if str(L) not in SL.tseq_choices():
+                L = 21
+            return ui.TagList(
+                ui.input_select("sq_t", "T-sequence length t", SL.tseq_choices(), selected=str(L)),
+                ui.input_select("sq_tsrc", "Source of the T-sequences", SL.tseq_source_choices(L)),
+                ui.input_select("sq_w", "Combine with Williamson matrices", SL.williamson_choices(L), selected="0"))
+        if kind == "legendre":
+            L = int(_sel("sq_l", "13") or 13)
+            if str(L) not in SL.legendre_choices():
+                L = 13
+            return ui.TagList(
+                ui.input_select("sq_l", "Length ℓ (odd)", SL.legendre_choices(), selected=str(L)),
+                ui.input_select("sq_lsrc", "Source of the pair", SL.legendre_source_choices(L)))
+        if kind == "lquad":
+            return ui.input_select("sq_m", "Length m (even)", SL.lquad_choices(), selected="10")
+        if kind == "dscore":
+            L = int(_sel("sq_dl", "15") or 15)
+            if str(L) not in SL.dscore_choices():
+                L = 15
+            return ui.TagList(
+                ui.input_select("sq_dl", "Length ℓ of the difference set", SL.dscore_choices(), selected=str(L)),
+                ui.input_select("sq_dsrc", "Difference set", SL.dscore_source_choices(L)))
+        if kind == "scarpis":
+            q = int(_sel("sq_q", "7") or 7)
+            if str(q) not in SL.scarpis_choices():
+                q = 7
+            return ui.TagList(
+                ui.input_select("sq_q", "Prime power q ≡ 3 (mod 4)", SL.scarpis_choices(), selected=str(q)),
+                ui.input_select("sq_sinput", "Input Hadamard matrix of order q + 1", SL.scarpis_input_choices(q), selected="auto"))
+        return ui.div()
+
+    @reactive.calc
+    @reactive.event(input.sq_generate, ignore_none=False)
+    def sq() -> SL.SeqResult:
+        kind = input.sq_kind()
+        if kind == "golay":
+            prm = {"g": _sel("sq_g", "10")}
+        elif kind == "tseq":
+            t = _sel("sq_t", "21")
+            src = _sel("sq_tsrc", "")
+            if not src or not src.endswith(":" + str(t)) and src.split(":")[0] not in ("golay2",):
+                opts = list(SL.tseq_source_choices(int(t)))
+                src = src if src in opts else (opts[0] if opts else "")
+            prm = {"t": t, "tsrc": src, "w": _sel("sq_w", "0")}
+        elif kind == "legendre":
+            L = _sel("sq_l", "13")
+            opts = list(SL.legendre_source_choices(int(L)))
+            src = _sel("sq_lsrc", "")
+            prm = {"l": L, "lsrc": src if src in opts else (opts[0] if opts else "")}
+        elif kind == "lquad":
+            prm = {"m": _sel("sq_m", "10")}
+        elif kind == "dscore":
+            L = _sel("sq_dl", "15")
+            opts = list(SL.dscore_source_choices(int(L)))
+            src = _sel("sq_dsrc", "")
+            prm = {"l": L, "dsrc": src if src in opts else (opts[0] if opts else "")}
+        else:
+            q = _sel("sq_q", "7")
+            m = _sel("sq_sinput", "auto")
+            prm = {"q": q, "sinput": m if m in SL.scarpis_input_choices(int(q)) else "auto"}
+        return SL.run(kind, prm)
+
+    def _sq_method_name(r: SL.SeqResult) -> str:
+        if r.kind == "tseq":
+            if r.params.get("w", "0") not in ("0", 0):
+                return "Cooper–Wallis"
+            src = str(r.params.get("tsrc", "")).split(":")[0]
+            return C.METHODS[{"base": "gs_base", "turyn": "gs_turyn", "tseq": "gs_tseq"}.get(src, "gs_golay")].name
+        return C.METHODS[SL.KIND_TO_METHOD[r.kind]].name
+
+    @render.ui
+    def sq_banner():
+        r = sq()
+        if not r.ok:
+            return banner("err", ui.tags.b("Cannot build: "), r.error or "an ingredient check failed.")
+        return banner("ok", ui.tags.b("Verified. "), f"{r.title}: H·Hᵀ = {r.order}·I holds exactly for the order-{r.order} matrix.")
+
+    @render.ui
+    def sq_stats():
+        r = sq()
+        req(r.ok)
+        return ui.layout_columns(
+            stat("Order", r.order, f"{r.order**2:,} entries"),
+            stat("Construction", _sq_method_name(r), "from ingredients"),
+            stat("Ingredient identity", "passed" if all(c[2] for c in r.checks[:-1]) else "FAILED",
+                 r.corr_kind + " autocorrelation" if r.corr_kind not in ("none", "group") else "input matrix", "ok"),
+            stat("H·Hᵀ = nI", "passed" if r.checks and r.checks[-1][2] else "FAILED", "exact integer check", "ok"),
+            stat("Time", f"{r.seconds*1000:.0f} ms", "construction"),
+            col_widths=[2, 4, 2, 2, 2])
+
+    @render.ui
+    def sq_desc():
+        r = sq()
+        req(r.ok)
+        return ui.div(ui.p(r.description), ui.p(ui.tags.b("Reference: "), r.reference, class_="hint"))
+
+    @_render_code
+    def sq_ingredients():
+        r = sq()
+        req(r.ok)
+        return SL.ingredients_text(r)
+
+    @render.ui
+    def sq_checks():
+        r = sq()
+        req(r.ok)
+        yn = lambda ok: "yes" if ok else "no"
+        rows = [ui.tags.tr(ui.tags.td(lab), ui.tags.td(ui.span(val, class_="yes" if ok else "no"))) for lab, val, ok in r.checks]
+        return ui.tags.table(*rows, class_="kv")
+
+    @render.plot(alt="Total autocorrelation of the ingredient sequences at every shift.")
+    def sq_corr_plot():
+        r = sq()
+        req(r.ok and r.corr is not None)
+        c = r.corr
+        fig, ax = plt.subplots(dpi=100)
+        ax.bar(np.arange(1, len(c)), c[1:], color="#24486d", width=0.8)
+        ax.axhline(r.corr_target, color="#b4472e", lw=1, ls="--")
+        ax.set_xlabel("shift s")
+        ax.set_ylabel("sum of autocorrelations")
+        lo, hi = min(int(c[1:].min()), r.corr_target), max(int(c[1:].max()), r.corr_target)
+        ax.set_ylim(lo - 1.5, hi + 1.5)
+        ax.set_title(f"Σ {r.corr_kind} autocorrelations, s ≠ 0 (peak {int(c[0])} omitted)\ntarget {r.corr_target} at every shift",
+                     fontsize=8.5)
+        ax.tick_params(labelsize=8)
+        fig.tight_layout()
+        return fig
+
+    @render.plot(alt="Black and white image of the constructed Hadamard matrix.")
+    def sq_matrix_plot():
+        r = sq()
+        req(r.ok)
+        H, n = r.H, r.H.shape[0]
+        fig, ax = plt.subplots(figsize=(6, 6), dpi=110)
+        ax.imshow(H, cmap=ListedColormap(["#1d2b3a", "#f4f1ea"]), vmin=-1, vmax=1, interpolation="nearest")
+        if n <= 40:
+            ax.set_xticks(np.arange(-.5, n, 1), minor=True)
+            ax.set_yticks(np.arange(-.5, n, 1), minor=True)
+            ax.grid(which="minor", color="#8b97a3", lw=.35)
+            ax.tick_params(which="minor", length=0)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title(f"{r.title} — order {n}", fontsize=9, color="#17324d")
+        fig.tight_layout()
+        return fig
+
+    @render.ui
+    def sq_preview_note():
+        r = sq()
+        req(r.ok)
+        n = r.H.shape[0]
+        return ui.div(f"First {PREVIEW}×{PREVIEW} entries of {n}×{n}; download for the full matrix." if n > PREVIEW
+                      else f"Full {n}×{n} matrix.", class_="hint")
+
+    @_render_code
+    def sq_matrix_text():
+        r = sq()
+        req(r.ok)
+        return A.to_text(r.H[:PREVIEW, :PREVIEW], "sign")
+
+    @render.ui
+    def sq_verify_ui():
+        r = sq()
+        req(r.ok)
+        v = A.verify(r.H)
+        yn = lambda b: ui.span("yes" if b else "no", class_="yes" if b else "no")
+        return ui.tags.table(
+            ui.tags.tr(ui.tags.td("All entries ±1"), ui.tags.td(yn(v.entries_pm1))),
+            ui.tags.tr(ui.tags.td("Rows orthogonal (H·Hᵀ = nI)"), ui.tags.td(yn(v.row_orthogonal))),
+            ui.tags.tr(ui.tags.td("Columns orthogonal (Hᵀ·H = nI)"), ui.tags.td(yn(v.column_orthogonal))),
+            ui.tags.tr(ui.tags.td("Max |H·Hᵀ − nI|"), ui.tags.td(str(v.max_row_deviation))),
+            ui.tags.tr(ui.tags.td("log₁₀|det H| = (n/2)·log₁₀ n"), ui.tags.td(f"{v.log10_determinant:.4f}")),
+            class_="kv")
+
+    @render.ui
+    def sq_props_ui():
+        r = sq()
+        req(r.ok)
+        return kv_table(A.properties(r.H).as_rows())
+
+    def _sq_fname(ext):
+        try:
+            r = sq()
+            return f"hadamard_{r.order}_{r.kind}.{ext}" if r.ok else f"hadamard.{ext}"
+        except Exception:
+            return f"hadamard.{ext}"
+
+    @render.download(filename=lambda: _sq_fname("csv"))
+    def sq_dl_csv():
+        r = sq()
+        yield A.to_csv(r.H, "pm1") if r.ok else "No matrix generated\n"
+
+    @render.download(filename=lambda: _sq_fname("txt"))
+    def sq_dl_txt():
+        r = sq()
+        yield (A.to_text(r.H, "pm1") + "\n") if r.ok else "No matrix generated\n"
+
+    @render.download(filename=lambda: _sq_fname("ingredients.json"))
+    def sq_dl_seq():
+        r = sq()
+        yield SL.ingredients_json(r) if r.ok else "{}"
+
+    @render.download(filename=lambda: _sq_fname("ingredients.txt"))
+    def sq_dl_seqtxt():
+        r = sq()
+        yield (r.title + "\n" + SL.ingredients_text(r) + "\n") if r.ok else "No construction\n"
+
+    # ------------------------------------------------------------------
     # Existence explorer
     # ------------------------------------------------------------------
     @render.plot(alt="Grid of all orders 4 to 1000 coloured by the construction family that reaches them.")
@@ -627,14 +930,14 @@ def server(input, output, session):
         fig, ax = plt.subplots(figsize=(7.2, 8.2), dpi=105)
         for idx, (n, status, first, ms) in enumerate(rows):
             grid[idx // cols, idx % cols] = family_index(first, n)
-        cmap = ListedColormap([c for _, _, c in FAMILIES])
+        cmap = ListedColormap([c for _, _, c, _ in FAMILIES])
         ax.imshow(grid, cmap=cmap, vmin=0, vmax=len(FAMILIES) - 1, aspect="auto")
         for idx, (n, *_rest) in enumerate(rows):
             ax.text(idx % cols, idx // cols, str(n), ha="center", va="center", fontsize=6.4, color="white")
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_title("Orders 4 – 1000 (first applicable construction family)", fontsize=10, color="#17324d")
-        fig.legend(handles=[Patch(color=c, label=l) for l, _, c in FAMILIES], loc="lower center",
+        fig.legend(handles=[Patch(color=c, label=sh) for _, _, c, sh in FAMILIES], loc="lower center",
                    ncol=2, fontsize=7.2, frameon=False)
         fig.tight_layout(rect=[0, 0.11, 1, 1])
         return fig
@@ -648,8 +951,11 @@ def server(input, output, session):
         items = [ui.tags.li(ui.span(class_="legend-dot", style=f"background:{FAMILIES[i][2]}"),
                             f"{FAMILIES[i][0]}: ", ui.tags.b(str(counts.get(i, 0)))) for i in range(len(FAMILIES))]
         return ui.div(ui.tags.ul(*items, style="list-style:none;padding-left:0;margin:0"),
-                      ui.p(f"{COV_OK} of {COV_ALL} orders are constructible. Open cases: "
-                           f"{', '.join(map(str, P.KNOWN_OPEN))}.", class_="hint"))
+                      ui.p(f"{COV_OK} of {COV_ALL} orders are constructible"
+                           + (f"; open cases: {', '.join(map(str, P.KNOWN_OPEN))}." if P.KNOWN_OPEN else
+                              f". No order ≤ 1000 is open: a Hadamard matrix is known at every order below 2000 "
+                              f"(Alpöge, Voinov & Reynolds-Haertle 2026; Egan et al. 2026); the smallest open order is "
+                              f"{P.SMALLEST_OPEN_ORDER}."), class_="hint"))
 
     @render.data_frame
     def exist_table():

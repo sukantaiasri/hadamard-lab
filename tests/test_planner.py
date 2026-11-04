@@ -11,10 +11,28 @@ def test_validate_order():
 def test_coverage():
     rows = P.existence_table()
     missing = [r[0] for r in rows if not r[3]]
-    assert missing == [668, 716, 876, 892]
-    assert set(P.KNOWN_OPEN) == {668, 716, 892}
-    for n in (92, 116, 156, 172, 188, 412, 428, 508, 604, 652, 724, 764, 956, 964):
+    assert missing == []                      # every admissible order <= 1000 (since version 2.0)
+    assert P.KNOWN_OPEN == () and P.KNOWN_BUT_NOT_IMPLEMENTED == ()
+    for n in (92, 116, 156, 172, 188, 412, 428, 508, 604, 652, 668, 716, 724, 764, 876, 892, 956, 964):
         assert P.is_constructible(n), n
+
+
+def test_former_open_orders_use_2026_data():
+    assert P.construct(668).tree.method == "lquad" and P.construct(668).tree.params["m"] == 166
+    assert P.construct(716).tree.method == "lquad" and P.construct(716).tree.params["m"] == 178
+    assert "sds" in P.feasible_methods(892) and P.construct(892, "sds").tree.params["N"] == 223
+    assert "cooper_wallis" in P.feasible_methods(876)
+    c = P.construct(876, "cooper_wallis")
+    assert c.tree.params["L"] == 73 and c.tree.params["w"] == 3 and C.is_hadamard(c.matrix)
+
+
+def test_new_methods_reach_expected_orders():
+    rows = {n: ms for n, _, _, ms in P.existence_table()}
+    assert [n for n in rows if "scarpis" in rows[n]] == [12, 56, 132, 380, 552, 756, 992]
+    assert [n for n in rows if "golay2c" in rows[n]][:6] == [4, 8, 16, 20, 32, 40]
+    assert all("legendre" in rows[2 * p + 2] for p in (3, 5, 7, 11, 13) if 2 * p + 2 in rows)
+    assert "dscore" in rows[100] and "dscore" in rows[128] and "dscore" in rows[900]
+    assert "lquad" in rows[44] and "gs_tseq" in rows[292] and "gs_golay" in rows[84]
 
 
 def test_every_order_with_every_method():
@@ -29,8 +47,6 @@ def test_every_order_with_every_method():
 
 
 def test_errors():
-    with pytest.raises(ValueError, match="open case"):
-        P.construct(668)
     with pytest.raises(ValueError, match="cannot produce"):
         P.construct(12, "ehlich")
     with pytest.raises(ValueError):

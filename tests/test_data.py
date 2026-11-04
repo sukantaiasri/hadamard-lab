@@ -52,3 +52,30 @@ def test_t_sequences():
         assert C.is_t_sequence_set(C.t_sequences_from_base(*d["base"][n]))
     for t in d["turyn"]:
         assert C.is_t_sequence_set(C.t_sequences_from_base(*C.base_from_turyn(*d["turyn"][t])))
+
+
+def test_stored_t_sequences():
+    for t, ts in C.sequence_data()["tseq"].items():
+        assert all(len(x) == t for x in ts) and C.is_t_sequence_set([np.array(x) for x in ts]), t
+
+
+def test_stored_legendre_pairs():
+    from hadamard_lab import sequences as S
+    for L, (a, b) in C.sequence_data()["lpairs"].items():
+        assert len(a) == len(b) == L and L % 2 == 1
+        assert S.is_legendre_pair(a, b) and sum(a) == 1 and sum(b) == 1, L
+
+
+def test_stored_legendre_quadruples():
+    from hadamard_lab import sequences as S
+    for m, seqs in C.sequence_data()["lquads"].items():
+        assert all(len(x) == m for x in seqs) and m % 2 == 0
+        assert S.is_legendre_quadruple(seqs), m
+        assert [sum(x) for x in seqs] == [2, 0, 0, 0], m
+    assert {166, 178} <= set(C.sequence_data()["lquads"])
+
+
+def test_sds_223_parameters():
+    sets = C.sequence_data()["sds"][223]
+    assert sorted(len(s) for s in sets) == [100, 106, 106, 106]
+    assert sum(len(s) for s in sets) - 223 == 195

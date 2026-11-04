@@ -6,7 +6,11 @@ which construction applies to a requested order; this module only knows how to
 carry one out and how to describe it.
 
 Notation follows the classical literature (Hedayat & Wallis 1978,
-Seberry & Yamada 1992, Craigen 1996).
+Seberry & Yamada 1992, Craigen 1996, Seberry & Yamada 2020).
+
+Version 2.0 adds the sequence-based and difference-set constructions implemented in
+:mod:`sequences` (Golay pairs, Legendre pairs and quadruples, cyclic Hadamard difference
+sets, Scarpis–Đoković) and the data behind the orders 668, 716, 876 and 892.
 """
 from __future__ import annotations
 
@@ -18,7 +22,8 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from .gf import field as gf_field, is_prime_power, modulus_string, prime_power
+from .gf import field as gf_field, is_prime, is_prime_power, modulus_string, prime_power
+from . import sequences as SQ
 
 DATA_FILE = Path(__file__).with_name("data") / "sequences.json"
 
@@ -51,20 +56,48 @@ def sequence_data() -> dict:
         "base": {int(k): v for k, v in raw["base"].items()},
         "turyn": {int(k): v for k, v in raw["turyn"].items()},
         "sds": {int(k): v for k, v in raw["sds"].items()},
+        "tseq": {int(k): v for k, v in raw.get("tseq", {}).items()},
+        "lpairs": {int(k): v for k, v in raw.get("legendre_pairs", {}).items()},
+        "lquads": {int(k): v for k, v in raw.get("legendre_quadruples", {}).items()},
         "meta": raw["_meta"],
     }
 
 
-def t_sequence_lengths() -> Dict[int, str]:
-    """Lengths of the T-sequences obtainable from the stored base/Turyn data."""
+T_LENGTH_LIMIT = 250        # T-sequences longer than this are never needed for n <= 1000
+
+
+def t_sequence_sources() -> Dict[int, List[Tuple[str, int]]]:
+    """``length -> [(source, key), ...]`` for every way of obtaining T-sequences.
+
+    Sources: ``base`` (stored base sequences), ``turyn`` (stored Turyn-type sequences),
+    ``tseq`` (T-sequences stored directly), ``golay`` (``((a+b)/2, (a-b)/2, 0, 0)`` of a Golay
+    pair of length g) and ``golay2`` (length ``2g+1`` from the base sequences ``(a,1),(a,-1),b,b``).
+    """
     d = sequence_data()
-    out: Dict[int, str] = {}
+    out: Dict[int, List[Tuple[str, int]]] = {}
     for n, seqs in d["base"].items():
         p = len(seqs[0]) - len(seqs[2])
-        out.setdefault(2 * n + p, f"base sequences, n={n}")
+        out.setdefault(2 * n + p, []).append(("base", n))
     for t in d["turyn"]:
-        out.setdefault(3 * t - 1, f"Turyn-type sequences, n={t}")
+        out.setdefault(3 * t - 1, []).append(("turyn", t))
+    for t in d["tseq"]:
+        out.setdefault(t, []).append(("tseq", t))
+    for g in SQ.golay_lengths(T_LENGTH_LIMIT):
+        out.setdefault(g, []).append(("golay", g))
+        if 2 * g + 1 <= T_LENGTH_LIMIT:
+            out.setdefault(2 * g + 1, []).append(("golay2", g))
     return dict(sorted(out.items()))
+
+
+def describe_t_source(source: str, key: int) -> str:
+    return {"base": f"base sequences, m = {key}", "turyn": f"Turyn-type sequences, t = {key}",
+            "tseq": f"stored T-sequences, t = {key}", "golay": f"Golay pair of length {key}",
+            "golay2": f"Golay pair of length {key} (Turyn: length 2g + 1)"}[source]
+
+
+def t_sequence_lengths() -> Dict[int, str]:
+    """Lengths of the T-sequences obtainable from any source, with the preferred source."""
+    return {L: describe_t_source(*srcs[0]) for L, srcs in t_sequence_sources().items()}
 
 
 # ==========================================================================
@@ -180,7 +213,15 @@ def _t_sequences(source: str, key: int) -> List[np.ndarray]:
     d = sequence_data()
     if source == "base":
         return t_sequences_from_base(*d["base"][key])
-    return t_sequences_from_base(*base_from_turyn(*d["turyn"][key]))
+    if source == "turyn":
+        return t_sequences_from_base(*base_from_turyn(*d["turyn"][key]))
+    if source == "tseq":
+        return [np.asarray(t, dtype=np.int64) for t in d["tseq"][key]]
+    if source == "golay":
+        return SQ.t_sequences_from_golay(*SQ.golay_pair(key))
+    if source == "golay2":
+        return t_sequences_from_base(*SQ.base_sequences_from_golay(*SQ.golay_pair(key)))
+    raise KeyError(source)
 
 
 # ==========================================================================
@@ -384,6 +425,45 @@ def supplementary_difference_sets(n: int) -> np.ndarray:
     return _i8(goethals_seidel_array(A, B, C, D))
 
 
+# ---- version 2.0: sequence and difference-set constructions (see sequences.py) ----
+def goethals_seidel_tseq(source: str, key: int) -> np.ndarray:
+    """Goethals–Seidel array from T-sequences of any source (Golay-derived or stored)."""
+    return goethals_seidel_from_t(_t_sequences(source, key))
+
+
+def golay_two_circulant(g: int) -> np.ndarray:
+    """Order 2g from a Golay pair of length g: ``[[A, B], [-B', A']]``."""
+    return SQ.golay_two_circulant(*SQ.golay_pair(g))
+
+
+def legendre_pair_sources(limit: int = 1000) -> Dict[int, List[dict]]:
+    return SQ.legendre_pair_sources(limit, sequence_data()["lpairs"])
+
+
+def legendre_pair(spec: dict):
+    return SQ.legendre_pair(spec, sequence_data()["lpairs"])
+
+
+def legendre_two_circulant(spec: dict) -> np.ndarray:
+    """Order 2l + 2 from a Legendre pair of length l (two-circulant core)."""
+    return SQ.two_circulant_core(*legendre_pair(spec))
+
+
+def legendre_quadruple(m: int) -> np.ndarray:
+    """Order 4m + 4 from a stored Legendre quadruple of even length m (bordered Goethals–Seidel)."""
+    return SQ.legendre_quadruple_matrix(sequence_data()["lquads"][m])
+
+
+def difference_set_core(spec: dict) -> np.ndarray:
+    """Order l + 1 from a cyclic/abelian Hadamard difference set of a non-Paley type."""
+    return SQ.difference_set_core_matrix(spec)
+
+
+def scarpis(q: int, A: np.ndarray) -> np.ndarray:
+    """Order q(q+1) from a Hadamard matrix A of order q+1, q = 3 (mod 4) a prime power."""
+    return SQ.scarpis(q, A)
+
+
 # ==========================================================================
 # registry: every method knows how to enumerate its parameter sets for an order
 # ==========================================================================
@@ -407,37 +487,61 @@ METHODS: Dict[str, Method] = {m.key: m for m in [
     Method("paley2", "Paley II",
            "n = 2(q + 1) with q a prime power, q ≡ 1 (mod 4).",
            "Paley (1933)", 3),
+    Method("golay2c", "Golay pair – two circulants",
+           "n = 2g from a Golay complementary pair of length g = 2^a·10^b·26^c in [[A, B], [−Bᵀ, Aᵀ]].",
+           "Golay (1961); Turyn (1974); Borwein & Ferguson (2004)", 4),
     Method("williamson", "Williamson",
            "n = 4w from four symmetric circulant matrices of order w in the Williamson array.",
-           "Williamson (1944)", 4),
+           "Williamson (1944)", 5),
     Method("gs_turyn", "Goethals–Seidel (Turyn-type sequences)",
            "n = 4(3t − 1) from Turyn-type sequences of length t via base and T-sequences.",
-           "Goethals & Seidel (1967); Turyn (1974)", 5),
+           "Goethals & Seidel (1967); Turyn (1974); London & Kotsireas (2025)", 6),
     Method("gs_base", "Goethals–Seidel (base sequences)",
            "n = 4(2m + p) from base sequences of lengths m+p, m+p, m, m via T-sequences.",
-           "Goethals & Seidel (1967); Seberry & Yamada (1992)", 6),
+           "Goethals & Seidel (1967); Seberry & Yamada (1992); Đoković (2010)", 7),
+    Method("gs_golay", "Goethals–Seidel (Golay-derived T-sequences)",
+           "n = 4g or n = 4(2g + 1) from the T-sequences of a Golay pair of length g.",
+           "Golay (1961); Turyn (1974)", 8),
+    Method("gs_tseq", "Goethals–Seidel (stored T-sequences)",
+           "n = 4t from T-sequences of length t stored directly (t = 73).",
+           "Cooper & Wallis (1972); Egan, Kotsireas, London & Ó Catháin (2026)", 9),
+    Method("legendre", "Legendre pair – two-circulant core",
+           "n = 2ℓ + 2 from a Legendre pair of odd length ℓ (periodic autocorrelations summing to −2).",
+           "Fletcher, Gysin & Seberry (2001); Kotsireas & Koutschan (2021)", 10),
+    Method("dscore", "Cyclic Hadamard difference set – circulant core",
+           "n = ℓ + 1 from a Singer (m-sequence), twin-prime-power or Hall sextic-residue difference set.",
+           "Singer (1938); Stanton & Sprott (1958); Hall (1956); Whiteman (1962)", 11),
+    Method("lquad", "Legendre quadruple – bordered Goethals–Seidel",
+           "n = 4m + 4 from four sequences of even length m with periodic autocorrelations summing to −4.",
+           "Egan, Kotsireas, London & Ó Catháin (2026); Alpöge, Voinov & Reynolds-Haertle (2026)", 12),
+    Method("scarpis", "Scarpis – Đoković",
+           "n = q(q + 1) from an Hadamard matrix of order q + 1, q ≡ 3 (mod 4) a prime power.",
+           "Scarpis (1898); Đoković (2017)", 13),
     Method("paley2_general", "Paley II – generalised (Williamson)",
            "n = h(q + 1) from an Hadamard matrix of order h > 2 and q ≡ 1 (mod 4).",
-           "Williamson (1944)", 7),
+           "Williamson (1944)", 14),
     Method("baumert_hall", "Baumert–Hall",
            "n = 12w from the order-12 Baumert–Hall array filled with Williamson matrices.",
-           "Baumert & Hall (1965)", 8),
+           "Baumert & Hall (1965)", 15),
     Method("ehlich", "Ehlich",
            "n = (k − 1)² from a skew Paley matrix of order k + 1 and a Paley II core of order k − 2.",
-           "Ehlich (1965)", 9),
+           "Ehlich (1965)", 16),
     Method("miyamoto", "Miyamoto",
            "n = 4q for a prime power q ≡ 1 (mod 4) when an Hadamard matrix of order q − 1 exists.",
-           "Miyamoto (1991)", 10),
+           "Miyamoto (1991)", 17),
     Method("cooper_wallis", "Cooper–Wallis",
            "n = 4wL from Williamson matrices of order w and T-sequences of length L.",
-           "Cooper & Wallis (1972)", 11),
+           "Cooper & Wallis (1972)", 18),
     Method("sds", "Supplementary difference sets",
            "n = 4N from four supplementary difference sets in Z_N in the Goethals–Seidel array.",
-           "Wallis & Whiteman (1972); Djoković (1992–1994)", 12),
+           "Wallis & Whiteman (1972); Đoković (1992–2008); Alpöge, Voinov & Reynolds-Haertle (2026)", 19),
     Method("kronecker", "Kronecker product",
            "n = a·b from Hadamard matrices of orders a and b.",
-           "Sylvester (1867)", 13),
+           "Sylvester (1867)", 20),
 ]}
+
+# methods new in version 2.0 (shown in the "Construction lab" tab)
+NEW_IN_V2 = ("golay2c", "gs_golay", "gs_tseq", "legendre", "dscore", "lquad", "scarpis")
 
 
 def is_hadamard_order(n: int) -> bool:
@@ -514,6 +618,33 @@ def candidate_params(method: str, n: int) -> List[dict]:
     elif method == "sds":
         if n % 4 == 0 and n // 4 in d["sds"]:
             out.append({"N": n // 4, "deps": []})
+    elif method == "golay2c":
+        if n % 2 == 0 and n // 2 in SQ.golay_lengths(n // 2):
+            out.append({"g": n // 2, "deps": []})
+    elif method == "gs_golay":
+        if n % 4 == 0:
+            for src, key in t_sequence_sources().get(n // 4, []):
+                if src in ("golay", "golay2"):
+                    out.append({"t": n // 4, "g": key, "source": src, "key": key, "deps": []})
+    elif method == "gs_tseq":
+        if n % 4 == 0 and n // 4 in d["tseq"]:
+            out.append({"t": n // 4, "source": "tseq", "key": n // 4, "deps": []})
+    elif method == "legendre":
+        if n % 4 == 0:
+            L = (n - 2) // 2
+            for spec in legendre_pair_sources(n).get(L, []):
+                out.append({"l": L, "spec": _freeze_spec(spec), "deps": []})
+    elif method == "dscore":
+        L = n - 1
+        for spec in SQ.two_level_sources(n).get(L, []):
+            out.append({"l": L, "spec": _freeze_spec(spec), "deps": []})
+    elif method == "lquad":
+        if n % 4 == 0 and (n - 4) // 4 in d["lquads"]:
+            out.append({"m": (n - 4) // 4, "deps": []})
+    elif method == "scarpis":
+        for q in range(3, 40, 4):
+            if q * (q + 1) == n and is_prime_power(q):
+                out.append({"q": q, "deps": [q + 1]})
     elif method == "kronecker":
         for a in range(2, int(n ** 0.5) + 1):
             if n % a == 0:
@@ -526,14 +657,23 @@ def candidate_params(method: str, n: int) -> List[dict]:
 
 
 def _t_source(L: int) -> Tuple[str, int]:
-    d = sequence_data()
-    for n, seqs in d["base"].items():
-        if 2 * n + len(seqs[0]) - len(seqs[2]) == L:
-            return "base", n
-    for t in d["turyn"]:
-        if 3 * t - 1 == L:
-            return "turyn", t
-    raise KeyError(L)
+    return t_sequence_sources()[L][0]
+
+
+def _freeze_spec(spec: dict) -> str:
+    """Specs are stored in the (hashable) planner as a compact string such as ``twin:q=11``."""
+    return spec["kind"] + ":" + ",".join(f"{k}={v}" for k, v in sorted(spec.items()) if k != "kind")
+
+
+def thaw_spec(s: str) -> dict:
+    kind, _, rest = s.partition(":")
+    out: dict = {"kind": kind}
+    for item in rest.split(","):
+        if not item:
+            continue
+        k, v = item.split("=")
+        out[k] = (v == "True") if v in ("True", "False") else int(v)
+    return out
 
 
 # ==========================================================================
@@ -566,6 +706,18 @@ def build_direct(method: str, n: int, params: dict, deps: Dict[int, np.ndarray])
         return cooper_wallis(params["w"], params["source"], params["key"])
     if method == "sds":
         return supplementary_difference_sets(params["N"])
+    if method == "golay2c":
+        return golay_two_circulant(params["g"])
+    if method in ("gs_golay", "gs_tseq"):
+        return goethals_seidel_tseq(params["source"], params["key"])
+    if method == "legendre":
+        return legendre_two_circulant(thaw_spec(params["spec"]))
+    if method == "dscore":
+        return difference_set_core(thaw_spec(params["spec"]))
+    if method == "lquad":
+        return legendre_quadruple(params["m"])
+    if method == "scarpis":
+        return scarpis(params["q"], deps[params["q"] + 1])
     if method == "kronecker":
         return kronecker(deps[params["a"]], deps[params["b"]])
     raise KeyError(method)

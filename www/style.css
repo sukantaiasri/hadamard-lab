@@ -9,7 +9,9 @@ h1,h2,h3,h4,h5{ font-family:"Source Serif 4",Georgia,"Times New Roman",serif; co
 h5{ font-size:1.02rem; margin-bottom:.75rem; }
 .navbar{ background:var(--hl-navy) !important; border-bottom:3px solid var(--hl-accent); }
 .navbar .navbar-brand,.navbar .nav-link{ color:#f2efe8 !important; }
-.navbar .nav-link{ opacity:.82; font-size:.94rem; }
+.navbar .nav-link{ opacity:.82; font-size:.86rem; padding-left:.5rem !important; padding-right:.5rem !important; }
+.brand small{ display:none; }
+@media (min-width:1500px){ .brand small{ display:inline; } }
 .navbar .nav-link.active,.navbar .nav-link:hover{ opacity:1; box-shadow:inset 0 -2px 0 var(--hl-accent); }
 .brand{ display:inline-flex; align-items:center; gap:.5rem; font-family:"Source Serif 4",Georgia,serif; font-weight:600; letter-spacing:.3px; }
 .brand small{ font-family:system-ui,sans-serif; font-weight:400; opacity:.7; margin-left:.6rem; font-size:.72rem; letter-spacing:.8px; text-transform:uppercase; }
@@ -138,3 +140,4 @@ table.blk th{ background:#f1f3f6; color:var(--hl-navy); font-weight:600; }
 table, .stat .val, pre, .matrix{ font-variant-numeric:tabular-nums; }
 .navbar .nav-link{ padding:.55rem .65rem !important; font-size:.92rem; }
 @media (max-width:1500px){ .brand small{ display:none; } }
+.badge-new{ font-family:"Source Sans 3",sans-serif; font-size:10px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; background:var(--hl-accent); color:#fff; border-radius:999px; padding:1px 7px; margin-left:.6rem; vertical-align:middle; }
